@@ -36,6 +36,8 @@ var rightDoorAngle = 0.0;
 var leftDoorAngle = 0.0;
 var rightRearDoorAngle = 0.0;
 var leftRearDoorAngle = 0.0;
+var handBrakeAngle = 0.0;
+var handBrakeEngaged = false;
 
 // Physics
 var carVelocity = 0.0;
@@ -208,6 +210,7 @@ function setupEventListeners() {
                 carPosition = vec3(0.0, 0.0, 0.0); carRotationY = 0.0; frontWheelSteerY = 0.0;
                 wheelRotationXRear = 0.0; wheelRotationXFront = 0.0; carVelocity = 0.0;
                 hoodAngle = 0.0; trunkAngle = 0.0; rightDoorAngle = 0.0; leftDoorAngle = 0.0; rightRearDoorAngle = 0.0; leftRearDoorAngle = 0.0;
+                handBrakeAngle = 0.0; handBrakeEngaged = false;
                 theta = [15, -15, 0]; translationScene = [0, 0, 0]; scaleFactor = 1.0;
                 lightOffset = [0.0, 0.0];
                 const ids = ['LightX','LightY','HoodAngle','TrunkAngle','RightDoorAngle','LeftDoorAngle','RightRearDoorAngle','LeftRearDoorAngle'];
@@ -217,6 +220,11 @@ function setupEventListeners() {
                 brakePressed = false;
                 break;
             case 'f': case 'F': followCar = !followCar; if (followCar) { cameraAt = carPosition; } break;
+            case 'p': case 'P':
+                // Toggle hand brake
+                handBrakeEngaged = !handBrakeEngaged;
+                handBrakeAngle = handBrakeEngaged ? 45.0 : 0.0;
+                break;
         }
     };
     window.onkeyup = function(event) {
@@ -289,6 +297,14 @@ function updateCarState(dt) {
     if (turnRight) { frontWheelSteerY = Math.min(maxSteer, frontWheelSteerY + steerSpeed); }
     else if (turnLeft) { frontWheelSteerY = Math.max(-maxSteer, frontWheelSteerY - steerSpeed); }
     else { if (Math.abs(frontWheelSteerY) < steerSpeed) frontWheelSteerY = 0; else if (frontWheelSteerY > 0) frontWheelSteerY -= steerSpeed; else frontWheelSteerY += steerSpeed; }
+
+    // Jika hand brake aktif, mobil tidak bisa bergerak
+    if (handBrakeEngaged) {
+        // Hentikan mobil secara bertahap
+        if (carVelocity > 0) carVelocity = Math.max(0, carVelocity - brakeAccel * dt);
+        else if (carVelocity < 0) carVelocity = Math.min(0, carVelocity + brakeAccel * dt);
+        return; // Skip update posisi jika hand brake aktif
+    }
 
     const a = accel; const d = decel;
     if (brakePressed) {
