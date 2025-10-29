@@ -2,10 +2,26 @@
 <html>
 <head>
     <title>Tugas 2 - Animasi Mobil</title>
+    <style>
+        #content-wrapper {
+            display: flex;
+            flex-wrap: wrap; /* Membantu di layar kecil */
+            gap: 10px;      /* Memberi jarak antar elemen */
+        }
+        canvas, video {
+            border: 1px solid #ccc; /* Memberi batas agar terlihat */
+        }
+    </style>
 </head>
 <body>
 
-<canvas id="gl-canvas" width="512" height="512"> </canvas>
+<div id="content-wrapper">
+    <canvas id="gl-canvas" width="512" height="512"> </canvas>
+    
+    <video src="video_objek.mp4" width="512" height="512" controls autoplay muted loop>
+        Browser Anda tidak mendukung tag video.
+    </video>
+</div>
 
 <img id="catTexture" 
      src="cat.jpeg" 
