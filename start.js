@@ -15,10 +15,12 @@ var viewMatrix; // Matrix untuk kamera
 // VAO (Vertex Array Objects) untuk menyimpan state buffer
 var wheelVAO;
 var bodyVAO;
+var steeringWheelVAO;
 
 // Informasi Geometri (jumlah indices)
 var wheelIndicesCount;
 var bodyIndicesCount;
+var steeringWheelIndicesCount;
 
 // --- State Animasi Mobil ---
 var carPosition = vec3(0.0, 0.0, 0.0); // Posisi body
@@ -30,6 +32,8 @@ var frontWheelSteerY = 0.0;             // Rotasi belok roda depan
 // Body parts animation
 var hoodAngle = 0.0;    // degrees, hood open angle (rotate around X, positive = open up)
 var trunkAngle = 0.0;   // degrees, trunk open angle
+var rightDoorAngle = 0.0;  // degrees, right door open angle (rotate around Y)
+var leftDoorAngle = 0.0;   // degrees, left door open angle (rotate around Y)
 
 // Physics (acceleration)
 var carVelocity = 0.0;  // units per second (forward +, backward -)
@@ -183,6 +187,31 @@ window.onload = function init() {
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, iBufferBody);
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(bodyGeom.indices), gl.STATIC_DRAW);
 
+    // --- VAO untuk Steering Wheel (Setir) ---
+    steeringWheelVAO = gl.createVertexArray();
+    gl.bindVertexArray(steeringWheelVAO);
+    var steeringGeom = createSteeringWheelGeometry(0.25, 0.03, 20); // Radius 0.25, tebal 0.03
+    steeringWheelIndicesCount = steeringGeom.indices.length;
+
+    // Buffer Posisi Steering Wheel
+    var vBufferSteering = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vBufferSteering);
+    gl.bufferData(gl.ARRAY_BUFFER, flatten(steeringGeom.vertices), gl.STATIC_DRAW);
+    gl.vertexAttribPointer(positionLoc, 3, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(positionLoc);
+
+    // Buffer Normal Steering Wheel
+    var nBufferSteering = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, nBufferSteering);
+    gl.bufferData(gl.ARRAY_BUFFER, flatten(steeringGeom.normals), gl.STATIC_DRAW);
+    gl.vertexAttribPointer(normalLoc, 3, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(normalLoc);
+
+    // Buffer Indices Steering Wheel
+    var iBufferSteering = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, iBufferSteering);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(steeringGeom.indices), gl.STATIC_DRAW);
+
     // Unbind VAO (good practice)
     gl.bindVertexArray(null);
 
@@ -234,6 +263,8 @@ function setupEventListeners() {
                 carVelocity = 0.0;
                 hoodAngle = 0.0;
                 trunkAngle = 0.0;
+                rightDoorAngle = 0.0;
+                leftDoorAngle = 0.0;
                 // Reset scene transforms (free-cam style)
                 theta = [15, -15, 0];
                 translationScene = [0, 0, 0];
@@ -253,10 +284,18 @@ function setupEventListeners() {
                 const trunkEl2 = document.getElementById('TrunkAngle');
                 const hoodLab2 = document.getElementById('HoodAngleVal');
                 const trunkLab2 = document.getElementById('TrunkAngleVal');
+                const rightDoorEl2 = document.getElementById('RightDoorAngle');
+                const leftDoorEl2 = document.getElementById('LeftDoorAngle');
+                const rightDoorLab2 = document.getElementById('RightDoorAngleVal');
+                const leftDoorLab2 = document.getElementById('LeftDoorAngleVal');
                 if (hoodEl2) hoodEl2.value = '0';
                 if (trunkEl2) trunkEl2.value = '0';
                 if (hoodLab2) hoodLab2.textContent = '0';
                 if (trunkLab2) trunkLab2.textContent = '0';
+                if (rightDoorEl2) rightDoorEl2.value = '0';
+                if (leftDoorEl2) leftDoorEl2.value = '0';
+                if (rightDoorLab2) rightDoorLab2.textContent = '0';
+                if (leftDoorLab2) leftDoorLab2.textContent = '0';
                 const speedEl2 = document.getElementById('SpeedVal');
                 if (speedEl2) speedEl2.textContent = '0.00';
                 brakePressed = false;
@@ -367,6 +406,30 @@ function setupEventListeners() {
             const v = Math.max(0, Math.min(45, parseFloat(e.target.value)));
             trunkAngle = v;
             if (trunkVal) trunkVal.textContent = v.toFixed(0);
+        });
+    }
+
+    // Door Sliders
+    const rightDoorInput = document.getElementById('RightDoorAngle');
+    const leftDoorInput = document.getElementById('LeftDoorAngle');
+    const rightDoorVal = document.getElementById('RightDoorAngleVal');
+    const leftDoorVal = document.getElementById('LeftDoorAngleVal');
+    if (rightDoorInput) {
+        rightDoorInput.value = String(rightDoorAngle.toFixed(0));
+        if (rightDoorVal) rightDoorVal.textContent = rightDoorAngle.toFixed(0);
+        rightDoorInput.addEventListener('input', (e) => {
+            const v = Math.max(0, Math.min(90, parseFloat(e.target.value)));
+            rightDoorAngle = v;
+            if (rightDoorVal) rightDoorVal.textContent = v.toFixed(0);
+        });
+    }
+    if (leftDoorInput) {
+        leftDoorInput.value = String(leftDoorAngle.toFixed(0));
+        if (leftDoorVal) leftDoorVal.textContent = leftDoorAngle.toFixed(0);
+        leftDoorInput.addEventListener('input', (e) => {
+            const v = Math.max(0, Math.min(90, parseFloat(e.target.value)));
+            leftDoorAngle = v;
+            if (leftDoorVal) leftDoorVal.textContent = v.toFixed(0);
         });
     }
 }
@@ -508,7 +571,7 @@ function render(timestamp) {
     
     // === MULAI HIERARCHICAL MODELLING ===
 
-    // 3. Gambar BODY MOBIL dalam 3 bagian: depan (hood), tengah (body), belakang (trunk)
+    // 3. Gambar BODY MOBIL dalam 6 bagian: atas, bawah, kanan (pintu), kiri (pintu), depan (hood), belakang (trunk)
     gl.bindVertexArray(bodyVAO);
     setMaterial(bodyMaterialAmbient, bodyMaterialDiffuse, bodyMaterialSpecular, bodyMaterialShininess);
 
@@ -522,12 +585,52 @@ function render(timestamp) {
     const frontDepth = 1.0;  // depan (hood)
     const backDepth = 1.0;   // belakang (trunk)
     const baseFullDepth = 4.0; // depth of base cube geometry
+    const baseFullWidth = 2.0; // width of base cube geometry
+    const baseFullHeight = 1.0; // height of base cube geometry
+    const bodyWidth = 2.0;
+    const bodyHeight = 1.0;
+    const thinThickness = 0.1; // ketebalan untuk bagian tipis
 
-    // Middle (body): center at 0, scale z to 0.5 of base (2/4)
-    var midM = mult(mat4(), bodyCombined);
-    midM = mult(midM, scale(1.0, 1.0, middleDepth / baseFullDepth));
-    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(midM));
-    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, midM), true)));
+    // --- BAGIAN TENGAH DIPECAH MENJADI 4 BAGIAN ---
+    
+    // 1. BAGIAN ATAS TENGAH (Tipis, ketebalan 0.1)
+    var topMiddleM = mult(mat4(), bodyCombined);
+    topMiddleM = mult(topMiddleM, translate(0.0, bodyHeight / 2, 0.0)); // Posisi di atas
+    topMiddleM = mult(topMiddleM, scale(1.0, thinThickness / baseFullHeight, middleDepth / baseFullDepth)); // Tipis Y, panjang Z sesuai middle
+    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(topMiddleM));
+    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, topMiddleM), true)));
+    gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
+
+    // 2. BAGIAN BAWAH TENGAH (Tipis, ketebalan 0.1)
+    var bottomMiddleM = mult(mat4(), bodyCombined);
+    bottomMiddleM = mult(bottomMiddleM, translate(0.0, -bodyHeight / 2, 0.0)); // Posisi di bawah
+    bottomMiddleM = mult(bottomMiddleM, scale(1.0, thinThickness / baseFullHeight, middleDepth / baseFullDepth)); // Tipis Y, panjang Z sesuai middle
+    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(bottomMiddleM));
+    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, bottomMiddleM), true)));
+    gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
+
+    // 3. BAGIAN KANAN TENGAH (Pintu kanan - bisa dibuka)
+    // Pivot pintu di depan (z positif) agar membuka ke belakang
+    const rightDoorPivotZ = middleDepth / 2; // Engsel di depan
+    var rightMiddleM = mult(mat4(), bodyCombined);
+    rightMiddleM = mult(rightMiddleM, translate(bodyWidth / 2, 0.0, rightDoorPivotZ)); // Pindah ke pivot (engsel depan kanan)
+    rightMiddleM = mult(rightMiddleM, rotateY(-rightDoorAngle)); // Rotasi membuka pintu (negatif = buka ke kanan)
+    rightMiddleM = mult(rightMiddleM, translate(0.0, 0.0, -middleDepth / 2)); // Pindah ke center pintu
+    rightMiddleM = mult(rightMiddleM, scale(thinThickness / baseFullWidth, 0.8, middleDepth / baseFullDepth)); // Pintu, panjang Z sesuai middle
+    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(rightMiddleM));
+    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, rightMiddleM), true)));
+    gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
+
+    // 4. BAGIAN KIRI TENGAH (Pintu kiri - bisa dibuka)
+    // Pivot pintu di depan (z positif) agar membuka ke belakang
+    const leftDoorPivotZ = middleDepth / 2; // Engsel di depan
+    var leftMiddleM = mult(mat4(), bodyCombined);
+    leftMiddleM = mult(leftMiddleM, translate(-bodyWidth / 2, 0.0, leftDoorPivotZ)); // Pindah ke pivot (engsel depan kiri)
+    leftMiddleM = mult(leftMiddleM, rotateY(leftDoorAngle)); // Rotasi membuka pintu (positif = buka ke kiri)
+    leftMiddleM = mult(leftMiddleM, translate(0.0, 0.0, -middleDepth / 2)); // Pindah ke center pintu
+    leftMiddleM = mult(leftMiddleM, scale(thinThickness / baseFullWidth, 0.8, middleDepth / baseFullDepth)); // Pintu, panjang Z sesuai middle
+    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(leftMiddleM));
+    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, leftMiddleM), true)));
     gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
 
     // Front split: Engine (0.4) + Hood (0.1)
@@ -580,6 +683,166 @@ function render(timestamp) {
     doorM = mult(doorM, scale(1.0, doorH, backDepth / baseFullDepth));
     gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(doorM));
     gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, doorM), true)));
+    gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
+
+    //------------------------------------------------------------------------------------------------------//
+    
+    // --- STEERING WHEEL (Setir) ---
+    gl.bindVertexArray(steeringWheelVAO);
+    // Material setir (hitam/dark gray)
+    var steeringMaterialAmbient = vec4(0.1, 0.1, 0.1, 1.0);
+    var steeringMaterialDiffuse = vec4(0.2, 0.2, 0.2, 1.0);
+    var steeringMaterialSpecular = vec4(0.3, 0.3, 0.3, 1.0);
+    var steeringMaterialShininess = 30.0;
+    setMaterial(steeringMaterialAmbient, steeringMaterialDiffuse, steeringMaterialSpecular, steeringMaterialShininess);
+
+    // Posisi setir: di dalam mobil, sisi kiri depan, menghadap driver
+    var steeringM = mult(mat4(), bodyCombined);
+    steeringM = mult(steeringM, translate(0.4, 0.0, 0.7)); // Kiri depan, di dalam mobil
+    steeringM = mult(steeringM, rotateY(rad2deg(-frontWheelSteerY))); // Ikuti arah belok roda depan
+    steeringM = mult(steeringM, rotateY(-15)); // Miring sedikit ke arah driver
+    steeringM = mult(steeringM, rotateX(20)); // Miring ke belakang sedikit
+    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(steeringM));
+    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, steeringM), true)));
+    gl.drawElements(gl.TRIANGLES, steeringWheelIndicesCount, gl.UNSIGNED_SHORT, 0);
+
+    // Steering column (tiang setir) - gunakan body cube yang di-scale tipis
+    gl.bindVertexArray(bodyVAO);
+    setMaterial(steeringMaterialAmbient, steeringMaterialDiffuse, steeringMaterialSpecular, steeringMaterialShininess);
+    var columnM = mult(mat4(), bodyCombined);
+    columnM = mult(columnM, translate(0.4, -0.15, 0.7)); // Di bawah setir
+    columnM = mult(columnM, rotateY(-15));
+    columnM = mult(columnM, rotateX(20));
+    columnM = mult(columnM, scale(0.025, 0.15, 0.025)); // Tiang tipis panjang
+    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(columnM));
+    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, columnM), true)));
+    gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
+
+    //------------------------------------------------------------------------------------------------------//
+    
+    // --- PEDALS (Pedal Gas dan Rem) ---
+    gl.bindVertexArray(bodyVAO);
+    
+    // Pedal Gas (kanan) - Material silver/metallic
+    var gasPedalMaterialAmbient = vec4(0.3, 0.3, 0.3, 1.0);
+    var gasPedalMaterialDiffuse = vec4(0.5, 0.5, 0.5, 1.0);
+    var gasPedalMaterialSpecular = vec4(0.8, 0.8, 0.8, 1.0);
+    var gasPedalMaterialShininess = 50.0;
+    setMaterial(gasPedalMaterialAmbient, gasPedalMaterialDiffuse, gasPedalMaterialSpecular, gasPedalMaterialShininess);
+    
+    var gasPedalM = mult(mat4(), bodyCombined);
+    gasPedalM = mult(gasPedalM, translate(0.25, -0.4, 0.5)); // Di bawah setir, agak ke kanan
+    gasPedalM = mult(gasPedalM, rotateX(75)); // Miring ke depan seperti pedal
+    gasPedalM = mult(gasPedalM, scale(0.08, 0.15, 0.02)); // Pedal pipih
+    // Animasi: pedal turun saat moveForward
+    if (moveForward) {
+        gasPedalM = mult(translate(0.0, -0.05, 0.0), gasPedalM);
+    }
+    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(gasPedalM));
+    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, gasPedalM), true)));
+    gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
+
+    // Pedal Rem (kiri dari gas) - Material silver/metallic tapi sedikit lebih gelap
+    var brakePedalMaterialAmbient = vec4(0.25, 0.25, 0.25, 1.0);
+    var brakePedalMaterialDiffuse = vec4(0.4, 0.4, 0.4, 1.0);
+    var brakePedalMaterialSpecular = vec4(0.7, 0.7, 0.7, 1.0);
+    var brakePedalMaterialShininess = 50.0;
+    setMaterial(brakePedalMaterialAmbient, brakePedalMaterialDiffuse, brakePedalMaterialSpecular, brakePedalMaterialShininess);
+    
+    var brakePedalM = mult(mat4(), bodyCombined);
+    brakePedalM = mult(brakePedalM, translate(0.35, -0.4, 0.5)); // Di sebelah kiri pedal gas
+    brakePedalM = mult(brakePedalM, rotateX(75)); // Miring ke depan seperti pedal
+    brakePedalM = mult(brakePedalM, scale(0.1, 0.15, 0.02)); // Pedal lebih lebar dari gas
+    // Animasi: pedal turun saat brakePressed atau moveBackward
+    if (brakePressed || moveBackward) {
+        brakePedalM = mult(translate(0.0, -0.05, 0.0), brakePedalM);
+    }
+    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(brakePedalM));
+    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, brakePedalM), true)));
+    gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
+
+    //------------------------------------------------------------------------------------------------------//
+    
+    // --- SEATS (Kursi) ---
+    gl.bindVertexArray(bodyVAO);
+    
+    // Material kursi (coklat gelap / leather)
+    var seatMaterialAmbient = vec4(0.2, 0.1, 0.05, 1.0);
+    var seatMaterialDiffuse = vec4(0.4, 0.2, 0.1, 1.0);
+    var seatMaterialSpecular = vec4(0.3, 0.15, 0.1, 1.0);
+    var seatMaterialShininess = 20.0;
+    setMaterial(seatMaterialAmbient, seatMaterialDiffuse, seatMaterialSpecular, seatMaterialShininess);
+    
+    // === KURSI DRIVER (Kiri Depan) ===
+    // Base/dudukan kursi driver
+    var driverSeatBase = mult(mat4(), bodyCombined);
+    driverSeatBase = mult(driverSeatBase, translate(0.6, -0.3, -0.1)); // Kiri, di belakang setir dan pedal, lebih ke samping dan bawah
+    driverSeatBase = mult(driverSeatBase, scale(0.2, 0.06, 0.25)); // Dudukan lebih kecil dan pendek
+    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(driverSeatBase));
+    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, driverSeatBase), true)));
+    gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
+    
+    // Backrest/sandaran kursi driver
+    var driverSeatBack = mult(mat4(), bodyCombined);
+    driverSeatBack = mult(driverSeatBack, translate(0.6, -0.1, -0.225)); // Di belakang dudukan
+    driverSeatBack = mult(driverSeatBack, rotateX(-10)); // Miring sedikit ke belakang
+    driverSeatBack = mult(driverSeatBack, scale(0.2, 0.25, 0.04)); // Sandaran lebih kecil
+    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(driverSeatBack));
+    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, driverSeatBack), true)));
+    gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
+    
+    // === KURSI PENUMPANG (Kanan Depan) ===
+    // Base/dudukan kursi penumpang
+    var passengerSeatBase = mult(mat4(), bodyCombined);
+    passengerSeatBase = mult(passengerSeatBase, translate(-0.6, -0.3, -0.1)); // Kanan depan, lebih ke samping dan bawah
+    passengerSeatBase = mult(passengerSeatBase, scale(0.2, 0.06, 0.25)); // Dudukan lebih kecil dan pendek
+    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(passengerSeatBase));
+    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, passengerSeatBase), true)));
+    gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
+    
+    // Backrest/sandaran kursi penumpang
+    var passengerSeatBack = mult(mat4(), bodyCombined);
+    passengerSeatBack = mult(passengerSeatBack, translate(-0.6, -0.1, -0.225)); // Di belakang dudukan
+    passengerSeatBack = mult(passengerSeatBack, rotateX(-10)); // Miring sedikit ke belakang
+    passengerSeatBack = mult(passengerSeatBack, scale(0.2, 0.25, 0.04)); // Sandaran lebih kecil
+    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(passengerSeatBack));
+    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, passengerSeatBack), true)));
+    gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
+    
+    // === KURSI BELAKANG KIRI ===
+    // Base/dudukan kursi belakang kiri
+    var rearLeftSeatBase = mult(mat4(), bodyCombined);
+    rearLeftSeatBase = mult(rearLeftSeatBase, translate(0.55, -0.25, -0.5)); // Kiri belakang, lebih jauh
+    rearLeftSeatBase = mult(rearLeftSeatBase, scale(0.25, 0.08, 0.3)); // Dudukan pipih
+    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(rearLeftSeatBase));
+    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, rearLeftSeatBase), true)));
+    gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
+    
+    // Backrest/sandaran kursi belakang kiri
+    var rearLeftSeatBack = mult(mat4(), bodyCombined);
+    rearLeftSeatBack = mult(rearLeftSeatBack, translate(0.55, -0.05, -0.65)); // Di belakang dudukan
+    rearLeftSeatBack = mult(rearLeftSeatBack, rotateX(-10)); // Miring sedikit ke belakang
+    rearLeftSeatBack = mult(rearLeftSeatBack, scale(0.25, 0.3, 0.05)); // Sandaran tipis tinggi
+    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(rearLeftSeatBack));
+    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, rearLeftSeatBack), true)));
+    gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
+    
+    // === KURSI BELAKANG KANAN ===
+    // Base/dudukan kursi belakang kanan
+    var rearRightSeatBase = mult(mat4(), bodyCombined);
+    rearRightSeatBase = mult(rearRightSeatBase, translate(-0.55, -0.25, -0.5)); // Kanan belakang, lebih jauh
+    rearRightSeatBase = mult(rearRightSeatBase, scale(0.25, 0.08, 0.3)); // Dudukan pipih
+    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(rearRightSeatBase));
+    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, rearRightSeatBase), true)));
+    gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
+    
+    // Backrest/sandaran kursi belakang kanan
+    var rearRightSeatBack = mult(mat4(), bodyCombined);
+    rearRightSeatBack = mult(rearRightSeatBack, translate(-0.55, -0.05, -0.65)); // Di belakang dudukan
+    rearRightSeatBack = mult(rearRightSeatBack, rotateX(-10)); // Miring sedikit ke belakang
+    rearRightSeatBack = mult(rearRightSeatBack, scale(0.25, 0.3, 0.05)); // Sandaran tipis tinggi
+    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(rearRightSeatBack));
+    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, rearRightSeatBack), true)));
     gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
 
     //------------------------------------------------------------------------------------------------------//
@@ -815,5 +1078,56 @@ function createCubeGeometry(width, height, depth) {
         20, 21, 22,   20, 22, 23  // Kiri
     ];
 
+    return { vertices, normals, indices };
+}
+
+/**
+ * Membuat geometri steering wheel (setir).
+ * Torus (donat) untuk grip setir.
+ */
+function createSteeringWheelGeometry(radius, thickness, segments) {
+    const vertices = [];
+    const normals = [];
+    const indices = [];
+    
+    // Torus parameters
+    const majorRadius = radius; // Radius lingkaran besar
+    const minorRadius = thickness; // Radius pipa (ketebalan setir)
+    
+    for (let i = 0; i <= segments; i++) {
+        const theta = (i / segments) * 2 * Math.PI; // Sudut pada lingkaran besar
+        
+        for (let j = 0; j <= segments; j++) {
+            const phi = (j / segments) * 2 * Math.PI; // Sudut pada pipa
+            
+            // Position
+            const x = (majorRadius + minorRadius * Math.cos(phi)) * Math.cos(theta);
+            const y = (majorRadius + minorRadius * Math.cos(phi)) * Math.sin(theta);
+            const z = minorRadius * Math.sin(phi);
+            
+            vertices.push(vec3(x, y, z));
+            
+            // Normal
+            const centerX = majorRadius * Math.cos(theta);
+            const centerY = majorRadius * Math.sin(theta);
+            const nx = x - centerX;
+            const ny = y - centerY;
+            const nz = z;
+            const len = Math.sqrt(nx*nx + ny*ny + nz*nz);
+            normals.push(vec3(nx/len, ny/len, nz/len));
+        }
+    }
+    
+    // Create indices
+    for (let i = 0; i < segments; i++) {
+        for (let j = 0; j < segments; j++) {
+            const first = i * (segments + 1) + j;
+            const second = first + segments + 1;
+            
+            indices.push(first, second, first + 1);
+            indices.push(second, second + 1, first + 1);
+        }
+    }
+    
     return { vertices, normals, indices };
 }
