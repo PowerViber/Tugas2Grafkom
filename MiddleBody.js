@@ -5,7 +5,7 @@ function drawMiddleBody(bodyCombined) {
     // Requires globals: gl, bodyVAO, steeringWheelVAO, viewMatrix, modelViewMatrixLoc, nMatrixLoc,
     // setMaterial, bodyIndicesCount, steeringWheelIndicesCount,
     // bodyMaterialAmbient, bodyMaterialDiffuse, bodyMaterialSpecular, bodyMaterialShininess,
-    // frontWheelSteerY, moveForward, brakePressed, moveBackward
+    // frontWheelSteerY, moveForward, brakePressed, moveBackward, handBrakeAngle
 
     gl.bindVertexArray(bodyVAO);
     setMaterial(bodyMaterialAmbient, bodyMaterialDiffuse, bodyMaterialSpecular, bodyMaterialShininess);
@@ -88,7 +88,7 @@ function drawMiddleBody(bodyCombined) {
     var steeringMaterialShininess = 30.0;
     setMaterial(steeringMaterialAmbient, steeringMaterialDiffuse, steeringMaterialSpecular, steeringMaterialShininess);
 
-    // Steering wheel rotation
+    // Steering wheel rotation (Torus/Lingkaran)
     var steeringM = mult(mat4(), bodyCombined);
     steeringM = mult(steeringM, translate(0.5, 0.0, 0.7));
     steeringM = mult(steeringM, rotateZ((frontWheelSteerY / 0.6) * 720.0));
@@ -96,8 +96,36 @@ function drawMiddleBody(bodyCombined) {
     gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, steeringM), true)));
     gl.drawElements(gl.TRIANGLES, steeringWheelIndicesCount, gl.UNSIGNED_SHORT, 0);
 
-    // Steering column (body cube scaled thin)
+    // --- TAMBAHAN: Jari-jari Setir (+) ---
+    // Gunakan bodyVAO (kubus) dan skala-kan
     gl.bindVertexArray(bodyVAO);
+    // Material sudah di-set dari setir (steeringMaterial)
+
+    // Jari-jari horizontal (X-axis)
+    // Skala (W, H, D) relatif thd kubus 2x1x4
+    // Radius setir 0.25, jadi diameter 0.5.
+    // Lebar (X): 0.5 / 2.0 = 0.25
+    // Tinggi (Y): 0.05 / 1.0 = 0.05 (ketebalan)
+    // Kedalaman (Z): 0.03 / 4.0 = 0.0075 (ketebalan)
+    var spokeHorizM = mult(mat4(), steeringM);
+    spokeHorizM = mult(spokeHorizM, scale(0.25, 0.05, 0.0075));
+    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(spokeHorizM));
+    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, spokeHorizM), true)));
+    gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
+
+    // Jari-jari vertikal (Y-axis)
+    // Lebar (X): 0.05 / 2.0 = 0.025 (ketebalan)
+    // Tinggi (Y): 0.5 / 1.0 = 0.5
+    // Kedalaman (Z): 0.03 / 4.0 = 0.0075 (ketebalan)
+    var spokeVertM = mult(mat4(), steeringM);
+    spokeVertM = mult(spokeVertM, scale(0.025, 0.5, 0.0075));
+    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(spokeVertM));
+    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, spokeVertM), true)));
+    gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
+    // --- AKHIR TAMBAHAN ---
+
+    // Steering column (body cube scaled thin)
+    gl.bindVertexArray(bodyVAO); // Pastikan VAO kubus aktif lagi
     setMaterial(steeringMaterialAmbient, steeringMaterialDiffuse, steeringMaterialSpecular, steeringMaterialShininess);
     var columnM = mult(mat4(), bodyCombined);
     columnM = mult(columnM, translate(0.5, -0.15, 0.7));
@@ -143,6 +171,41 @@ function drawMiddleBody(bodyCombined) {
     if (brakePressed) { brakePedalM = mult(translate(0.0, -0.05, 0.0), brakePedalM); }
     gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(brakePedalM));
     gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, brakePedalM), true)));
+    gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
+
+    // --- Hand Brake (Rem Tangan) ---
+    var handBrakeMaterialAmbient = vec4(0.15, 0.15, 0.15, 1.0);
+    var handBrakeMaterialDiffuse = vec4(0.3, 0.3, 0.3, 1.0);
+    var handBrakeMaterialSpecular = vec4(0.5, 0.5, 0.5, 1.0);
+    var handBrakeMaterialShininess = 40.0;
+    setMaterial(handBrakeMaterialAmbient, handBrakeMaterialDiffuse, handBrakeMaterialSpecular, handBrakeMaterialShininess);
+
+    // Hand brake base/mounting (small rectangular base)
+    var handBrakeBase = mult(mat4(), bodyCombined);
+    handBrakeBase = mult(handBrakeBase, translate(0.0, -0.35, 0.35)); // Positioned between seats
+    handBrakeBase = mult(handBrakeBase, scale(0.04, 0.03, 0.06));
+    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(handBrakeBase));
+    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, handBrakeBase), true)));
+    gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
+
+    // Hand brake lever (the main handle) - miring ke depan, bisa diangkat dengan tombol P
+    var handBrakeLever = mult(mat4(), bodyCombined);
+    handBrakeLever = mult(handBrakeLever, translate(0.0, -0.35, 0.35));
+    handBrakeLever = mult(handBrakeLever, rotateX(70 - handBrakeAngle)); // Angle dikurangi handBrakeAngle (naik saat handBrakeAngle bertambah)
+    handBrakeLever = mult(handBrakeLever, translate(0.0, 0.08, 0.0)); // Move up along the angled axis
+    handBrakeLever = mult(handBrakeLever, scale(0.015, 0.16, 0.015)); // Long thin lever
+    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(handBrakeLever));
+    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, handBrakeLever), true)));
+    gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
+
+    // Hand brake grip/handle (top part that you hold)
+    var handBrakeGrip = mult(mat4(), bodyCombined);
+    handBrakeGrip = mult(handBrakeGrip, translate(0.0, -0.35, 0.35));
+    handBrakeGrip = mult(handBrakeGrip, rotateX(70 - handBrakeAngle)); // Sama dengan lever
+    handBrakeGrip = mult(handBrakeGrip, translate(0.0, 0.18, 0.0)); // At the top of lever
+    handBrakeGrip = mult(handBrakeGrip, scale(0.025, 0.04, 0.025)); // Slightly thicker grip
+    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(handBrakeGrip));
+    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, handBrakeGrip), true)));
     gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
 
     // --- Seats ---
