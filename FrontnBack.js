@@ -4,7 +4,10 @@
 function drawFrontnBack(bodyCombined) {
     // Requires globals: gl, bodyVAO, viewMatrix, modelViewMatrixLoc, nMatrixLoc,
     // setMaterial, bodyIndicesCount, bodyMaterialAmbient, bodyMaterialDiffuse, bodyMaterialSpecular, bodyMaterialShininess,
-    // hoodAngle, trunkAngle
+    // hoodAngle, trunkAngle,
+    // useTextureLoc // <-- BARU
+
+    gl.uniform1i(useTextureLoc, false); // BARU: Nonaktifkan tekstur untuk semua bagian tubuh
 
     gl.bindVertexArray(bodyVAO);
     setMaterial(bodyMaterialAmbient, bodyMaterialDiffuse, bodyMaterialSpecular, bodyMaterialShininess);
