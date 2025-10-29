@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Tugas 2 - Animasi Mobil</title>
+</head>
+<body>
+
+<canvas id="gl-canvas" width="512" height="512"> </canvas>
+
+<script id="vertex-shader" type="x-shader/x-vertex">
+#version 300 es
+
+in vec4 aPosition;
+in vec4 aNormal;
+out vec3 N, L, E;
+
+uniform mat4 uModelViewMatrix; // Akan kita gunakan untuk ModelMatrix
+uniform mat4 uViewMatrix;      // Matrix untuk Kamera
+uniform mat4 uProjectionMatrix;
+uniform vec4 uLightPosition;
+uniform mat3 uNormalMatrix;
+
+void main()
+{
+    // Kita pisahkan ModelView menjadi View dan Model
+    // Ini lebih fleksibel untuk scene graph
+    vec4 posView = uViewMatrix * uModelViewMatrix * aPosition;
+    vec3 pos = posView.xyz;
+
+    if(uLightPosition.w == 0.0) L = normalize(uLightPosition.xyz);
+    else L = normalize( uLightPosition.xyz - pos );
+
+    E =  -normalize(pos);
+    
+    // Hitung Normal Matrix dari ModelView
+    // (Banyak library WebGL menyarankan ini dihitung di CPU)
+    // Di sini kita hitung dari ModelViewMatrix
+    N = normalize( uNormalMatrix * aNormal.xyz);
+
+    gl_Position = uProjectionMatrix * posView;
+}
+</script>
+
+<script id="fragment-shader" type="x-shader/x-fragment">
+#version 300 es
+precision mediump float;
+
+uniform vec4 uAmbientProduct;
+uniform vec4 uDiffuseProduct;
+uniform vec4 uSpecularProduct;
+uniform float uShininess;
+
+in vec3 N, L, E;
+out vec4 fColor;
+
+void main()
+{
+    vec3 H = normalize( L + E );
+    vec4 ambient = uAmbientProduct;
+
+    float Kd = max( dot(L, N), 0.0 );
+    vec4  diffuse = Kd*uDiffuseProduct;
+
+    float Ks = pow( max(dot(N, H), 0.0), uShininess );
+    vec4  specular = Ks * uSpecularProduct;
+
+    if( dot(L, N) < 0.0 ) specular = vec4(0.0, 0.0, 0.0, 1.0);
+
+    fColor = ambient + diffuse + specular;
+    fColor.a = 1.0;
+}
+</script>
+
+<p>Kontrol Mobil:</p>
+<button id = "ButtonForward">Maju</button>
+<button id = "ButtonBackward">Mundur</button>
+<button id = "ButtonTurnLeft">Belok Kiri</button>
+<button id = "ButtonTurnRight">Belok Kanan</button>
+
+<p>Kontrol Kamera (Opsional):</p>
+<button id = "ButtonCamZoomIn">Zoom In</button>
+<button id = "ButtonCamZoomOut">Zoom Out</button>
+
+<p>Kontrol Cahaya (Light Marker):</p>
+<label for="LightX">Light X: <span id="LightXVal">0.0</span></label>
+<input type="range" id="LightX" min="-10" max="10" step="0.1" value="0">
+<br/>
+<label for="LightY">Light Y: <span id="LightYVal">0.0</span></label>
+<input type="range" id="LightY" min="-10" max="10" step="0.1" value="0">
+
+<p>Kontrol Body:</p>
+<label for="HoodAngle">Hood (Kap) Angle: <span id="HoodAngleVal">0</span>°</label>
+<input type="range" id="HoodAngle" min="0" max="45" step="1" value="0">
+<br/>
+<label for="TrunkAngle">Trunk (Bagasi) Angle: <span id="TrunkAngleVal">0</span>°</label>
+<input type="range" id="TrunkAngle" min="0" max="45" step="1" value="0">
+
+<p>Status:</p>
+<div>Speed: <span id="SpeedVal">0.00</span> u/s</div>
+
+
+<p>Keyboard:</p>
+<ul>
+    <li>Mobil: W/S maju-mundur, A/D belok</li>
+    <li>Brake: E </li>
+    <li>Reset: R</li>
+    <li>Follow toggle: F</li>
+    </ul>
+
+<script src="initShaders.js"></script>
+<script src="MVnew.js"></script>
+<script src="start.js"></script> </body>
+</html>
