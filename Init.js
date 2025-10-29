@@ -7,6 +7,7 @@ var program;
 // Uniform locations
 var modelViewMatrixLoc, viewMatrixLoc, projectionMatrixLoc, nMatrixLoc;
 var ambientProductLoc, diffuseProductLoc, specularProductLoc, lightPositionLoc, shininessLoc;
+var textureSamplerLoc, useTextureLoc; // BARU: Uniforms untuk tekstur
 
 // Matrices
 var projectionMatrix;
@@ -21,6 +22,9 @@ var steeringWheelVAO;
 var wheelIndicesCount;
 var bodyIndicesCount;
 var steeringWheelIndicesCount;
+
+// BARU: Tekstur
+var wheelTexture;
 
 // Car animation state
 var carPosition = vec3(0.0, 0.0, 0.0);
@@ -88,8 +92,8 @@ var lightAmbient = vec4(0.2, 0.2, 0.2, 1.0);
 var lightDiffuse = vec4(1.0, 1.0, 1.0, 1.0);
 var lightSpecular = vec4(1.0, 1.0, 1.0, 1.0);
 
-var wheelMaterialAmbient = vec4(0.1, 0.1, 0.1, 1.0);
-var wheelMaterialDiffuse = vec4(0.2, 0.2, 0.2, 1.0);
+var wheelMaterialAmbient = vec4(0.4, 0.4, 0.4, 1.0);  // Dinaikkan dari 0.1
+var wheelMaterialDiffuse = vec4(0.8, 0.8, 0.8, 1.0);  // Dinaikkan dari 0.2
 var wheelMaterialSpecular = vec4(0.3, 0.3, 0.3, 1.0);
 var wheelMaterialShininess = 50.0;
 
@@ -120,6 +124,11 @@ window.onload = function init() {
     specularProductLoc = gl.getUniformLocation(program, "uSpecularProduct");
     lightPositionLoc = gl.getUniformLocation(program, "uLightPosition");
     shininessLoc = gl.getUniformLocation(program, "uShininess");
+    
+    // BARU: Uniforms & Atribut Tekstur
+    textureSamplerLoc = gl.getUniformLocation(program, "uTextureSampler");
+    useTextureLoc = gl.getUniformLocation(program, "uUseTexture");
+    var texCoordLoc = gl.getAttribLocation(program, "aTexCoord"); // Pindah ke sini
 
     var positionLoc = gl.getAttribLocation(program, "aPosition");
     var normalLoc = gl.getAttribLocation(program, "aNormal");
@@ -128,18 +137,29 @@ window.onload = function init() {
     // Wheels VAO
     wheelVAO = gl.createVertexArray();
     gl.bindVertexArray(wheelVAO);
-    var wheelGeom = createWheelGeometry(0.4, 0.3, 20);
+    var wheelGeom = createWheelGeometry(0.4, 0.3, 20); // Sekarang menghasilkan texCoords
     wheelIndicesCount = wheelGeom.indices.length;
+    
     var vBufferWheel = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, vBufferWheel);
     gl.bufferData(gl.ARRAY_BUFFER, flatten(wheelGeom.vertices), gl.STATIC_DRAW);
     gl.vertexAttribPointer(positionLoc, 3, gl.FLOAT, false, 0, 0);
     gl.enableVertexAttribArray(positionLoc);
+    
     var nBufferWheel = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, nBufferWheel);
     gl.bufferData(gl.ARRAY_BUFFER, flatten(wheelGeom.normals), gl.STATIC_DRAW);
     gl.vertexAttribPointer(normalLoc, 3, gl.FLOAT, false, 0, 0);
     gl.enableVertexAttribArray(normalLoc);
+
+    // --- BARU: Buffer untuk TexCoords Roda ---
+    var tBufferWheel = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, tBufferWheel);
+    gl.bufferData(gl.ARRAY_BUFFER, flatten(wheelGeom.texCoords), gl.STATIC_DRAW);
+    gl.vertexAttribPointer(texCoordLoc, 2, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(texCoordLoc);
+    // --- AKHIR BARU ---
+
     var iBufferWheel = gl.createBuffer();
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, iBufferWheel);
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(wheelGeom.indices), gl.STATIC_DRAW);
@@ -189,6 +209,8 @@ window.onload = function init() {
     gl.uniformMatrix4fv(projectionMatrixLoc, false, flatten(projectionMatrix));
     gl.uniform4fv(lightPositionLoc, flatten(lightPosition));
 
+    setupTextures(); // BARU: Panggil setup tekstur
+
     // Listeners
     setupEventListeners();
 
@@ -196,6 +218,24 @@ window.onload = function init() {
     lastTime = performance.now();
     requestAnimationFrame(render);
 }
+
+// BARU: Fungsi untuk setup tekstur
+function setupTextures() {
+    wheelTexture = gl.createTexture();
+    var catImage = document.getElementById("catTexture");
+    
+    gl.bindTexture(gl.TEXTURE_2D, wheelTexture);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, catImage);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+    gl.bindTexture(gl.TEXTURE_2D, null);
+}
+
 
 function setupEventListeners() {
     window.onkeydown = function(event) {
@@ -371,6 +411,9 @@ function render(timestamp) {
     var markerWorldPos = mult(lightMarkerBase, vec4(0.0, 0.0, 0.0, 1.0));
     var markerEyePos = mult(viewMatrix, markerWorldPos);
     gl.uniform4fv(lightPositionLoc, flatten(vec4(markerEyePos[0], markerEyePos[1], markerEyePos[2], 1.0)));
+    
+    gl.uniform1i(useTextureLoc, false); // BARU: Pastikan tekstur nonaktif untuk light marker
+
     gl.bindVertexArray(bodyVAO);
     setMaterial(vec4(0.6, 0.6, 0.0, 1.0), vec4(1.0, 1.0, 0.0, 1.0), vec4(0.2, 0.2, 0.0, 1.0), 20.0);
     gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(lightMarkerCombined));
@@ -394,17 +437,74 @@ function render(timestamp) {
 }
 
 // --- Geometry helpers ---
+// DIUBAH: createWheelGeometry sekarang menghasilkan texCoords
 function createWheelGeometry(radius, height, segments) {
-    const vertices = []; const normals = []; const indices = []; let index = 0; const halfHeight = height / 2;
-    for (let i = 0; i <= segments; i++) { const angle = (i / segments) * 2 * Math.PI; const x = radius * Math.cos(angle); const z = radius * Math.sin(angle); const nx = Math.cos(angle); const nz = Math.sin(angle); vertices.push(vec3(x, halfHeight, z)); normals.push(vec3(nx, 0, nz)); vertices.push(vec3(x, -halfHeight, z)); normals.push(vec3(nx, 0, nz)); }
-    const sideVertices = (segments + 1) * 2; for (let i = 0; i < segments; i++) { const i0 = i * 2; const i1 = i0 + 1; const i2 = i0 + 2; const i3 = i0 + 3; indices.push(i0, i1, i2); indices.push(i1, i3, i2); }
+    const vertices = []; const normals = []; const indices = []; const texCoords = []; // Tambahkan texCoords
+    let index = 0; const halfHeight = height / 2;
+
+    // Sisi Roda (Tread)
+    for (let i = 0; i <= segments; i++) {
+        const angle = (i / segments) * 2 * Math.PI;
+        const x = radius * Math.cos(angle);
+        const z = radius * Math.sin(angle);
+        const nx = Math.cos(angle);
+        const nz = Math.sin(angle);
+        
+        vertices.push(vec3(x, halfHeight, z));
+        normals.push(vec3(nx, 0, nz));
+        texCoords.push(vec2(i / segments, 1.0)); // UV untuk sisi atas
+
+        vertices.push(vec3(x, -halfHeight, z));
+        normals.push(vec3(nx, 0, nz));
+        texCoords.push(vec2(i / segments, 0.0)); // UV untuk sisi bawah
+    }
+    const sideVertices = (segments + 1) * 2;
+    for (let i = 0; i < segments; i++) {
+        const i0 = i * 2; const i1 = i0 + 1; const i2 = i0 + 2; const i3 = i0 + 3;
+        indices.push(i0, i1, i2); indices.push(i1, i3, i2);
+    }
+    
     index = sideVertices;
-    const topCenterIndex = index++; vertices.push(vec3(0, halfHeight, 0)); normals.push(vec3(0, 1, 0)); for (let i = 0; i <= segments; i++) { const angle = (i / segments) * 2 * Math.PI; const x = radius * Math.cos(angle); const z = radius * Math.sin(angle); vertices.push(vec3(x, halfHeight, z)); normals.push(vec3(0, 1, 0)); }
-    const topStartIndex = topCenterIndex + 1; for (let i = 0; i < segments; i++) { indices.push(topCenterIndex, topStartIndex + i, topStartIndex + i + 1); }
+
+    // Sisi Atas (Cap)
+    const topCenterIndex = index++;
+    vertices.push(vec3(0, halfHeight, 0));
+    normals.push(vec3(0, 1, 0));
+    texCoords.push(vec2(0.5, 0.5)); // UV Tengah
+    for (let i = 0; i <= segments; i++) {
+        const angle = (i / segments) * 2 * Math.PI;
+        const x = radius * Math.cos(angle);
+        const z = radius * Math.sin(angle);
+        vertices.push(vec3(x, halfHeight, z));
+        normals.push(vec3(0, 1, 0));
+        texCoords.push(vec2((x / radius + 1) / 2, (z / radius + 1) / 2)); // UV Polar
+    }
+    const topStartIndex = topCenterIndex + 1;
+    for (let i = 0; i < segments; i++) {
+        indices.push(topCenterIndex, topStartIndex + i, topStartIndex + i + 1);
+    }
+    
     index += (segments + 1);
-    const bottomCenterIndex = index++; vertices.push(vec3(0, -halfHeight, 0)); normals.push(vec3(0, -1, 0)); for (let i = 0; i <= segments; i++) { const angle = (i / segments) * 2 * Math.PI; const x = radius * Math.cos(angle); const z = radius * Math.sin(angle); vertices.push(vec3(x, -halfHeight, z)); normals.push(vec3(0, -1, 0)); }
-    const bottomStartIndex = bottomCenterIndex + 1; for (let i = 0; i < segments; i++) { indices.push(bottomCenterIndex, bottomStartIndex + i + 1, bottomStartIndex + i); }
-    return { vertices, normals, indices };
+
+    // Sisi Bawah (Cap)
+    const bottomCenterIndex = index++;
+    vertices.push(vec3(0, -halfHeight, 0));
+    normals.push(vec3(0, -1, 0));
+    texCoords.push(vec2(0.5, 0.5)); // UV Tengah
+    for (let i = 0; i <= segments; i++) {
+        const angle = (i / segments) * 2 * Math.PI;
+        const x = radius * Math.cos(angle);
+        const z = radius * Math.sin(angle);
+        vertices.push(vec3(x, -halfHeight, z));
+        normals.push(vec3(0, -1, 0));
+        texCoords.push(vec2((x / radius + 1) / 2, (z / radius + 1) / 2)); // UV Polar
+    }
+    const bottomStartIndex = bottomCenterIndex + 1;
+    for (let i = 0; i < segments; i++) {
+        indices.push(bottomCenterIndex, bottomStartIndex + i + 1, bottomStartIndex + i);
+    }
+    
+    return { vertices, normals, indices, texCoords }; // Kembalikan texCoords
 }
 
 function createCubeGeometry(width, height, depth) {
