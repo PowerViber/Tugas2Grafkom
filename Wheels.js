@@ -1,284 +1,79 @@
 "use strict";
 
-// Draw the middle body: top/bottom slabs, doors, steering wheel+column, pedals, and seats
-function drawMiddleBody(bodyCombined) {
-    // Requires globals: gl, bodyVAO, steeringWheelVAO, viewMatrix, modelViewMatrixLoc, nMatrixLoc,
-    // setMaterial, bodyIndicesCount, steeringWheelIndicesCount,
-    // bodyMaterialAmbient, bodyMaterialDiffuse, bodyMaterialSpecular, bodyMaterialShininess,
-    // frontWheelSteerY, moveForward, brakePressed, moveBackward, handBrakeAngle,
-    // useTextureLoc // <-- BARU
+// Draw all four wheels and their rim markers
+function drawWheels(bodyCombined) {
+    // Requires globals: gl, viewMatrix, modelViewMatrixLoc, nMatrixLoc,
+    // wheelVAO, bodyVAO, setMaterial, wheelMaterialAmbient, wheelMaterialDiffuse,
+    // wheelMaterialSpecular, wheelMaterialShininess, wheelIndicesCount, bodyIndicesCount,
+    // frontWheelSteerY, wheelRotationXFront, wheelRotationXRear
 
-    gl.uniform1i(useTextureLoc, false); // BARU: Nonaktifkan tekstur untuk semua bagian tubuh
+    // Local helper: radians -> degrees (avoid cross-file dependency)
+    const r2d = (r) => (r * 180.0 / Math.PI);
 
-    gl.bindVertexArray(bodyVAO);
-    setMaterial(bodyMaterialAmbient, bodyMaterialDiffuse, bodyMaterialSpecular, bodyMaterialShininess);
+    // Bind wheel texture and enable texturing
+    if (typeof wheelTexture !== 'undefined' && wheelTexture) {
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, wheelTexture);
+        gl.uniform1i(textureSamplerLoc, 0);
+        gl.uniform1i(useTextureLoc, true);
+    } else {
+        gl.uniform1i(useTextureLoc, false);
+    }
 
-    // Base dimensions
-    const middleDepth = 2.0;
-    const baseFullDepth = 4.0;
-    const baseFullWidth = 2.0;
-    const baseFullHeight = 1.0;
-    const bodyWidth = 2.0;
-    const bodyHeight = 1.0;
-    const thinThickness = 0.1;
+    // Material for wheels
+    gl.bindVertexArray(wheelVAO);
+    setMaterial(wheelMaterialAmbient, wheelMaterialDiffuse, wheelMaterialSpecular, wheelMaterialShininess);
 
-    // Top middle slab
-    var topMiddleM = mult(mat4(), bodyCombined);
-    topMiddleM = mult(topMiddleM, translate(0.0, bodyHeight / 2, 0.0));
-    topMiddleM = mult(topMiddleM, scale(1.0, thinThickness / baseFullHeight, middleDepth / baseFullDepth));
-    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(topMiddleM));
-    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, topMiddleM), true)));
-    gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
+    // Positions relative to body
+    const frontDist = 1.5;
+    const backDist = -1.5;
+    const sideDist = 1.0;
+    const heightDist = -0.3;
 
-    // Bottom middle slab
-    var bottomMiddleM = mult(mat4(), bodyCombined);
-    bottomMiddleM = mult(bottomMiddleM, translate(0.0, -bodyHeight / 2, 0.0));
-    bottomMiddleM = mult(bottomMiddleM, scale(1.0, thinThickness / baseFullHeight, middleDepth / baseFullDepth));
-    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(bottomMiddleM));
-    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, bottomMiddleM), true)));
-    gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
+    // Front-Left Wheel
+    var frontLeftWheelMatrix = mult(mat4(), bodyCombined);
+    frontLeftWheelMatrix = mult(frontLeftWheelMatrix, translate(sideDist, heightDist, frontDist));
+    frontLeftWheelMatrix = mult(frontLeftWheelMatrix, rotateY(r2d(-frontWheelSteerY)));
+    frontLeftWheelMatrix = mult(frontLeftWheelMatrix, rotateX(r2d(wheelRotationXFront)));
+    frontLeftWheelMatrix = mult(frontLeftWheelMatrix, rotateZ(90));
+    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(frontLeftWheelMatrix));
+    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, frontLeftWheelMatrix), true)));
+    gl.drawElements(gl.TRIANGLES, wheelIndicesCount, gl.UNSIGNED_SHORT, 0);
 
-    // Doors (front and rear)
-    const frontDoorDepth = middleDepth / 2;
-    const rearDoorDepth = middleDepth / 2;
+    // Front-Right Wheel
+    gl.bindVertexArray(wheelVAO);
+    setMaterial(wheelMaterialAmbient, wheelMaterialDiffuse, wheelMaterialSpecular, wheelMaterialShininess);
+    var frontRightWheelMatrix = mult(mat4(), bodyCombined);
+    frontRightWheelMatrix = mult(frontRightWheelMatrix, translate(-sideDist, heightDist, frontDist));
+    frontRightWheelMatrix = mult(frontRightWheelMatrix, rotateY(r2d(-frontWheelSteerY)));
+    frontRightWheelMatrix = mult(frontRightWheelMatrix, rotateX(r2d(wheelRotationXFront)));
+    frontRightWheelMatrix = mult(frontRightWheelMatrix, rotateZ(90));
+    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(frontRightWheelMatrix));
+    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, frontRightWheelMatrix), true)));
+    gl.drawElements(gl.TRIANGLES, wheelIndicesCount, gl.UNSIGNED_SHORT, 0);
 
-    // Globals needed: rightDoorAngle, leftDoorAngle, rightRearDoorAngle, leftRearDoorAngle
-    // Right front door (hinge at front)
-    var rightFrontDoorM = mult(mat4(), bodyCombined);
-    rightFrontDoorM = mult(rightFrontDoorM, translate(bodyWidth / 2, 0.0, middleDepth / 2));
-    rightFrontDoorM = mult(rightFrontDoorM, rotateY(-rightDoorAngle));
-    rightFrontDoorM = mult(rightFrontDoorM, translate(0.0, 0.0, -frontDoorDepth / 2));
-    rightFrontDoorM = mult(rightFrontDoorM, scale(thinThickness / baseFullWidth, 0.8, frontDoorDepth / baseFullDepth));
-    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(rightFrontDoorM));
-    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, rightFrontDoorM), true)));
-    gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
+    // Back-Left Wheel
+    gl.bindVertexArray(wheelVAO);
+    setMaterial(wheelMaterialAmbient, wheelMaterialDiffuse, wheelMaterialSpecular, wheelMaterialShininess);
+    var backLeftWheelMatrix = mult(mat4(), bodyCombined);
+    backLeftWheelMatrix = mult(backLeftWheelMatrix, translate(sideDist, heightDist, backDist));
+    backLeftWheelMatrix = mult(backLeftWheelMatrix, rotateX(r2d(wheelRotationXRear)));
+    backLeftWheelMatrix = mult(backLeftWheelMatrix, rotateZ(90));
+    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(backLeftWheelMatrix));
+    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, backLeftWheelMatrix), true)));
+    gl.drawElements(gl.TRIANGLES, wheelIndicesCount, gl.UNSIGNED_SHORT, 0);
 
-    // Left front door
-    var leftFrontDoorM = mult(mat4(), bodyCombined);
-    leftFrontDoorM = mult(leftFrontDoorM, translate(-bodyWidth / 2, 0.0, middleDepth / 2));
-    leftFrontDoorM = mult(leftFrontDoorM, rotateY(leftDoorAngle));
-    leftFrontDoorM = mult(leftFrontDoorM, translate(0.0, 0.0, -frontDoorDepth / 2));
-    leftFrontDoorM = mult(leftFrontDoorM, scale(thinThickness / baseFullWidth, 0.8, frontDoorDepth / baseFullDepth));
-    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(leftFrontDoorM));
-    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, leftFrontDoorM), true)));
-    gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
+    // Back-Right Wheel
+    gl.bindVertexArray(wheelVAO);
+    setMaterial(wheelMaterialAmbient, wheelMaterialDiffuse, wheelMaterialSpecular, wheelMaterialShininess);
+    var backRightWheelMatrix = mult(mat4(), bodyCombined);
+    backRightWheelMatrix = mult(backRightWheelMatrix, translate(-sideDist, heightDist, backDist));
+    backRightWheelMatrix = mult(backRightWheelMatrix, rotateX(r2d(wheelRotationXRear)));
+    backRightWheelMatrix = mult(backRightWheelMatrix, rotateZ(90));
+    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(backRightWheelMatrix));
+    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, backRightWheelMatrix), true)));
+    gl.drawElements(gl.TRIANGLES, wheelIndicesCount, gl.UNSIGNED_SHORT, 0);
 
-    // Right rear door (hinge in middle)
-    var rightRearDoorM = mult(mat4(), bodyCombined);
-    rightRearDoorM = mult(rightRearDoorM, translate(bodyWidth / 2, 0.0, 0.0));
-    rightRearDoorM = mult(rightRearDoorM, rotateY(-rightRearDoorAngle));
-    rightRearDoorM = mult(rightRearDoorM, translate(0.0, 0.0, -rearDoorDepth / 2));
-    rightRearDoorM = mult(rightRearDoorM, scale(thinThickness / baseFullWidth, 0.8, rearDoorDepth / baseFullDepth));
-    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(rightRearDoorM));
-    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, rightRearDoorM), true)));
-    gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
-
-    // Left rear door
-    var leftRearDoorM = mult(mat4(), bodyCombined);
-    leftRearDoorM = mult(leftRearDoorM, translate(-bodyWidth / 2, 0.0, 0.0));
-    leftRearDoorM = mult(leftRearDoorM, rotateY(leftRearDoorAngle));
-    leftRearDoorM = mult(leftRearDoorM, translate(0.0, 0.0, -rearDoorDepth / 2));
-    leftRearDoorM = mult(leftRearDoorM, scale(thinThickness / baseFullWidth, 0.8, rearDoorDepth / baseFullDepth));
-    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(leftRearDoorM));
-    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, leftRearDoorM), true)));
-    gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
-
-    // --- Steering wheel ---
-    gl.bindVertexArray(steeringWheelVAO);
-    var steeringMaterialAmbient = vec4(0.1, 0.1, 0.1, 1.0);
-    var steeringMaterialDiffuse = vec4(0.2, 0.2, 0.2, 1.0);
-    var steeringMaterialSpecular = vec4(0.3, 0.3, 0.3, 1.0);
-    var steeringMaterialShininess = 30.0;
-    setMaterial(steeringMaterialAmbient, steeringMaterialDiffuse, steeringMaterialSpecular, steeringMaterialShininess);
-
-    // Steering wheel rotation (Torus/Lingkaran)
-    var steeringM = mult(mat4(), bodyCombined);
-    steeringM = mult(steeringM, translate(0.5, 0.0, 0.7));
-    steeringM = mult(steeringM, rotateZ((frontWheelSteerY / 0.6) * 720.0));
-    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(steeringM));
-    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, steeringM), true)));
-    gl.drawElements(gl.TRIANGLES, steeringWheelIndicesCount, gl.UNSIGNED_SHORT, 0);
-
-    // --- TAMBAHAN: Jari-jari Setir (+) ---
-    // Gunakan bodyVAO (kubus) dan skala-kan
-    gl.bindVertexArray(bodyVAO);
-    // Material sudah di-set dari setir (steeringMaterial)
-
-    // Jari-jari horizontal (X-axis)
-    // Skala (W, H, D) relatif thd kubus 2x1x4
-    // Radius setir 0.25, jadi diameter 0.5.
-    // Lebar (X): 0.5 / 2.0 = 0.25
-    // Tinggi (Y): 0.05 / 1.0 = 0.05 (ketebalan)
-    // Kedalaman (Z): 0.03 / 4.0 = 0.0075 (ketebalan)
-    var spokeHorizM = mult(mat4(), steeringM);
-    spokeHorizM = mult(spokeHorizM, scale(0.25, 0.05, 0.0075));
-    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(spokeHorizM));
-    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, spokeHorizM), true)));
-    gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
-
-    // Jari-jari vertikal (Y-axis)
-    // Lebar (X): 0.05 / 2.0 = 0.025 (ketebalan)
-    // Tinggi (Y): 0.5 / 1.0 = 0.5
-    // Kedalaman (Z): 0.03 / 4.0 = 0.0075 (ketebalan)
-    var spokeVertM = mult(mat4(), steeringM);
-    spokeVertM = mult(spokeVertM, scale(0.025, 0.5, 0.0075));
-    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(spokeVertM));
-    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, spokeVertM), true)));
-    gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
-    // --- AKHIR TAMBAHAN ---
-
-    // Steering column (body cube scaled thin)
-    gl.bindVertexArray(bodyVAO); // Pastikan VAO kubus aktif lagi
-    setMaterial(steeringMaterialAmbient, steeringMaterialDiffuse, steeringMaterialSpecular, steeringMaterialShininess);
-    var columnM = mult(mat4(), bodyCombined);
-    columnM = mult(columnM, translate(0.5, -0.15, 0.7));
-    // columnM = mult(columnM, rotateY(-15));
-    // columnM = mult(columnM, rotateX(20));
-    columnM = mult(columnM, scale(0.025, 0.15, 0.025));
-    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(columnM));
-    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, columnM), true)));
-    gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
-
-    // --- Pedals ---
-    // Gas pedal
-    var gasPedalMaterialAmbient = vec4(0.3, 0.3, 0.3, 1.0);
-    var gasPedalMaterialDiffuse = vec4(0.5, 0.5, 0.5, 1.0);
-    var gasPedalMaterialSpecular = vec4(0.8, 0.8, 0.8, 1.0);
-    var gasPedalMaterialShininess = 50.0;
-    setMaterial(gasPedalMaterialAmbient, gasPedalMaterialDiffuse, gasPedalMaterialSpecular, gasPedalMaterialShininess);
-
-    var gasPedalM = mult(mat4(), bodyCombined);
-    gasPedalM = mult(gasPedalM, translate(0.35, -0.4, 0.8));
-    gasPedalM = mult(gasPedalM, rotateX(75));
-    gasPedalM = mult(gasPedalM, scale(0.05, 0.15, 0.02));
-
-    // One pedal controls both forward and backward
-    if (moveForward || moveBackward) { gasPedalM = mult(translate(0.0, -0.05, 0.0), gasPedalM); }
-    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(gasPedalM));
-    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, gasPedalM), true)));
-    gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
-
-    // Brake pedal
-    var brakePedalMaterialAmbient = vec4(0.25, 0.25, 0.25, 1.0);
-    var brakePedalMaterialDiffuse = vec4(0.4, 0.4, 0.4, 1.0);
-    var brakePedalMaterialSpecular = vec4(0.7, 0.7, 0.7, 1.0);
-    var brakePedalMaterialShininess = 50.0;
-    setMaterial(brakePedalMaterialAmbient, brakePedalMaterialDiffuse, brakePedalMaterialSpecular, brakePedalMaterialShininess);
-
-    var brakePedalM = mult(mat4(), bodyCombined);
-    brakePedalM = mult(brakePedalM, translate(0.45, -0.4, 0.8));
-    brakePedalM = mult(brakePedalM, rotateX(75));
-    brakePedalM = mult(brakePedalM, scale(0.05, 0.15, 0.02));
-
-    // Brake pedal responds only to braking
-    if (brakePressed) { brakePedalM = mult(translate(0.0, -0.05, 0.0), brakePedalM); }
-    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(brakePedalM));
-    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, brakePedalM), true)));
-    gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
-
-    // --- Hand Brake (Rem Tangan) ---
-    var handBrakeMaterialAmbient = vec4(0.15, 0.15, 0.15, 1.0);
-    var handBrakeMaterialDiffuse = vec4(0.3, 0.3, 0.3, 1.0);
-    var handBrakeMaterialSpecular = vec4(0.5, 0.5, 0.5, 1.0);
-    var handBrakeMaterialShininess = 40.0;
-    setMaterial(handBrakeMaterialAmbient, handBrakeMaterialDiffuse, handBrakeMaterialSpecular, handBrakeMaterialShininess);
-
-    // Hand brake base/mounting (small rectangular base)
-    var handBrakeBase = mult(mat4(), bodyCombined);
-    handBrakeBase = mult(handBrakeBase, translate(0.0, -0.35, 0.35)); // Positioned between seats
-    handBrakeBase = mult(handBrakeBase, scale(0.04, 0.03, 0.06));
-    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(handBrakeBase));
-    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, handBrakeBase), true)));
-    gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
-
-    // Hand brake lever (the main handle) - miring ke depan, bisa diangkat dengan tombol P
-    var handBrakeLever = mult(mat4(), bodyCombined);
-    handBrakeLever = mult(handBrakeLever, translate(0.0, -0.35, 0.35));
-    handBrakeLever = mult(handBrakeLever, rotateX(70 - handBrakeAngle)); // Angle dikurangi handBrakeAngle (naik saat handBrakeAngle bertambah)
-    handBrakeLever = mult(handBrakeLever, translate(0.0, 0.08, 0.0)); // Move up along the angled axis
-    handBrakeLever = mult(handBrakeLever, scale(0.015, 0.16, 0.015)); // Long thin lever
-    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(handBrakeLever));
-    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, handBrakeLever), true)));
-    gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
-
-    // Hand brake grip/handle (top part that you hold)
-    var handBrakeGrip = mult(mat4(), bodyCombined);
-    handBrakeGrip = mult(handBrakeGrip, translate(0.0, -0.35, 0.35));
-    handBrakeGrip = mult(handBrakeGrip, rotateX(70 - handBrakeAngle)); // Sama dengan lever
-    handBrakeGrip = mult(handBrakeGrip, translate(0.0, 0.18, 0.0)); // At the top of lever
-    handBrakeGrip = mult(handBrakeGrip, scale(0.025, 0.04, 0.025)); // Slightly thicker grip
-    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(handBrakeGrip));
-    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, handBrakeGrip), true)));
-    gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
-
-    // --- Seats ---
-    setMaterial(vec4(0.2, 0.1, 0.05, 1.0), vec4(0.4, 0.2, 0.1, 1.0), vec4(0.3, 0.15, 0.1, 1.0), 20.0);
-
-    // Driver seat
-    // base
-    var driverSeatBase = mult(mat4(), bodyCombined);
-    driverSeatBase = mult(driverSeatBase, translate(0.45, -0.3, 0.25));
-    driverSeatBase = mult(driverSeatBase, scale(0.2, 0.06, 0.1));
-    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(driverSeatBase));
-    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, driverSeatBase), true)));
-    gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
-    // back
-    var driverSeatBack = mult(mat4(), bodyCombined);
-    driverSeatBack = mult(driverSeatBack, translate(0.45, -0.1, 0.05));
-    driverSeatBack = mult(driverSeatBack, rotateX(-10));
-    driverSeatBack = mult(driverSeatBack, scale(0.2, 0.5, 0.04));
-    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(driverSeatBack));
-    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, driverSeatBack), true)));
-    gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
-
-    // RF seat
-    // base
-    var passengerSeatBase = mult(mat4(), bodyCombined);
-    passengerSeatBase = mult(passengerSeatBase, translate(-0.45, -0.3, 0.25));
-    passengerSeatBase = mult(passengerSeatBase, scale(0.2, 0.06, 0.1));
-    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(passengerSeatBase));
-    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, passengerSeatBase), true)));
-    gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
-    // back
-    var passengerSeatBack = mult(mat4(), bodyCombined);
-    passengerSeatBack = mult(passengerSeatBack, translate(-0.45, -0.1, 0.05));
-    passengerSeatBack = mult(passengerSeatBack, rotateX(-10));
-    passengerSeatBack = mult(passengerSeatBack, scale(0.2, 0.5, 0.04));
-    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(passengerSeatBack));
-    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, passengerSeatBack), true)));
-    gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
-
-    // LB seat
-    // base
-    var rearLeftSeatBase = mult(mat4(), bodyCombined);
-    rearLeftSeatBase = mult(rearLeftSeatBase, translate(0.45, -0.3, -0.5));
-    rearLeftSeatBase = mult(rearLeftSeatBase, scale(0.2, 0.06, 0.1));
-    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(rearLeftSeatBase));
-    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, rearLeftSeatBase), true)));
-    gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
-    // back
-    var rearLeftSeatBack = mult(mat4(), bodyCombined);
-    rearLeftSeatBack = mult(rearLeftSeatBack, translate(0.45, -0.1, -0.7));
-    rearLeftSeatBack = mult(rearLeftSeatBack, rotateX(-10));
-    rearLeftSeatBack = mult(rearLeftSeatBack, scale(0.2, 0.5, 0.04));
-    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(rearLeftSeatBack));
-    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, rearLeftSeatBack), true)));
-    gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
-
-    // RB seat
-    // base
-    var rearRightSeatBase = mult(mat4(), bodyCombined);
-    rearRightSeatBase = mult(rearRightSeatBase, translate(-0.45, -0.3, -0.5));
-    rearRightSeatBase = mult(rearRightSeatBase, scale(0.2, 0.06, 0.1));
-    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(rearRightSeatBase));
-    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, rearRightSeatBase), true)));
-    gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
-    // back
-    var rearRightSeatBack = mult(mat4(), bodyCombined);
-    rearRightSeatBack = mult(rearRightSeatBack, translate(-0.45, -0.1, -0.75));
-    rearRightSeatBack = mult(rearRightSeatBack, rotateX(-10));
-    rearRightSeatBack = mult(rearRightSeatBack, scale(0.2, 0.5, 0.04));
-    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(rearRightSeatBack));
-    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, rearRightSeatBack), true)));
-    gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
+    // Optional: leave texture state enabled; render() draws wheels last.
+    // If needed elsewhere, we could disable here with gl.uniform1i(useTextureLoc, false);
 }
