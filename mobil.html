@@ -7,12 +7,19 @@
 
 <canvas id="gl-canvas" width="512" height="512"> </canvas>
 
+<img id="catTexture" 
+     src="cat.jpeg" 
+     style="display: none;">
+
 <script id="vertex-shader" type="x-shader/x-vertex">
 #version 300 es
 
 in vec4 aPosition;
 in vec4 aNormal;
+in vec2 aTexCoord; // BARU: Input untuk koordinat tekstur
+
 out vec3 N, L, E;
+out vec2 vTexCoord; // BARU: Meneruskan koordinat tekstur ke fragment shader
 
 uniform mat4 uModelViewMatrix; // Akan kita gunakan untuk ModelMatrix
 uniform mat4 uViewMatrix;      // Matrix untuk Kamera
@@ -37,6 +44,7 @@ void main()
     // Di sini kita hitung dari ModelViewMatrix
     N = normalize( uNormalMatrix * aNormal.xyz);
 
+    vTexCoord = aTexCoord; // BARU: Teruskan UV
     gl_Position = uProjectionMatrix * posView;
 }
 </script>
@@ -49,6 +57,12 @@ uniform vec4 uAmbientProduct;
 uniform vec4 uDiffuseProduct;
 uniform vec4 uSpecularProduct;
 uniform float uShininess;
+
+// --- BARU ---
+uniform sampler2D uTextureSampler; // Sampler untuk tekstur
+uniform bool uUseTexture;         // Flag untuk mengaktifkan/menonaktifkan tekstur
+in vec2 vTexCoord;                // Menerima UV dari vertex shader
+// --- AKHIR BARU ---
 
 in vec3 N, L, E;
 out vec4 fColor;
@@ -66,8 +80,17 @@ void main()
 
     if( dot(L, N) < 0.0 ) specular = vec4(0.0, 0.0, 0.0, 1.0);
 
-    fColor = ambient + diffuse + specular;
+    // --- MODIFIKASI ---
+    vec4 baseColor = ambient + diffuse;
+    
+    if (uUseTexture) {
+        vec4 texColor = texture(uTextureSampler, vTexCoord);
+        baseColor = baseColor * texColor; // Modulasi warna dasar dengan tekstur
+    }
+
+    fColor = baseColor + specular; // Tambahkan specular (tidak diwarnai tekstur)
     fColor.a = 1.0;
+    // --- AKHIR MODIFIKASI ---
 }
 </script>
 
