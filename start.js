@@ -32,8 +32,10 @@ var frontWheelSteerY = 0.0;             // Rotasi belok roda depan
 // Body parts animation
 var hoodAngle = 0.0;    // degrees, hood open angle (rotate around X, positive = open up)
 var trunkAngle = 0.0;   // degrees, trunk open angle
-var rightDoorAngle = 0.0;  // degrees, right door open angle (rotate around Y)
-var leftDoorAngle = 0.0;   // degrees, left door open angle (rotate around Y)
+var rightDoorAngle = 0.0;  // degrees, right front door open angle (rotate around Y)
+var leftDoorAngle = 0.0;   // degrees, left front door open angle (rotate around Y)
+var rightRearDoorAngle = 0.0;  // degrees, right rear door open angle (rotate around Y)
+var leftRearDoorAngle = 0.0;   // degrees, left rear door open angle (rotate around Y)
 
 // Physics (acceleration)
 var carVelocity = 0.0;  // units per second (forward +, backward -)
@@ -265,6 +267,8 @@ function setupEventListeners() {
                 trunkAngle = 0.0;
                 rightDoorAngle = 0.0;
                 leftDoorAngle = 0.0;
+                rightRearDoorAngle = 0.0;
+                leftRearDoorAngle = 0.0;
                 // Reset scene transforms (free-cam style)
                 theta = [15, -15, 0];
                 translationScene = [0, 0, 0];
@@ -288,6 +292,10 @@ function setupEventListeners() {
                 const leftDoorEl2 = document.getElementById('LeftDoorAngle');
                 const rightDoorLab2 = document.getElementById('RightDoorAngleVal');
                 const leftDoorLab2 = document.getElementById('LeftDoorAngleVal');
+                const rightRearDoorEl2 = document.getElementById('RightRearDoorAngle');
+                const leftRearDoorEl2 = document.getElementById('LeftRearDoorAngle');
+                const rightRearDoorLab2 = document.getElementById('RightRearDoorAngleVal');
+                const leftRearDoorLab2 = document.getElementById('LeftRearDoorAngleVal');
                 if (hoodEl2) hoodEl2.value = '0';
                 if (trunkEl2) trunkEl2.value = '0';
                 if (hoodLab2) hoodLab2.textContent = '0';
@@ -296,6 +304,10 @@ function setupEventListeners() {
                 if (leftDoorEl2) leftDoorEl2.value = '0';
                 if (rightDoorLab2) rightDoorLab2.textContent = '0';
                 if (leftDoorLab2) leftDoorLab2.textContent = '0';
+                if (rightRearDoorEl2) rightRearDoorEl2.value = '0';
+                if (leftRearDoorEl2) leftRearDoorEl2.value = '0';
+                if (rightRearDoorLab2) rightRearDoorLab2.textContent = '0';
+                if (leftRearDoorLab2) leftRearDoorLab2.textContent = '0';
                 const speedEl2 = document.getElementById('SpeedVal');
                 if (speedEl2) speedEl2.textContent = '0.00';
                 brakePressed = false;
@@ -430,6 +442,30 @@ function setupEventListeners() {
             const v = Math.max(0, Math.min(90, parseFloat(e.target.value)));
             leftDoorAngle = v;
             if (leftDoorVal) leftDoorVal.textContent = v.toFixed(0);
+        });
+    }
+
+    // Rear Door Sliders
+    const rightRearDoorInput = document.getElementById('RightRearDoorAngle');
+    const leftRearDoorInput = document.getElementById('LeftRearDoorAngle');
+    const rightRearDoorVal = document.getElementById('RightRearDoorAngleVal');
+    const leftRearDoorVal = document.getElementById('LeftRearDoorAngleVal');
+    if (rightRearDoorInput) {
+        rightRearDoorInput.value = String(rightRearDoorAngle.toFixed(0));
+        if (rightRearDoorVal) rightRearDoorVal.textContent = rightRearDoorAngle.toFixed(0);
+        rightRearDoorInput.addEventListener('input', (e) => {
+            const v = Math.max(0, Math.min(90, parseFloat(e.target.value)));
+            rightRearDoorAngle = v;
+            if (rightRearDoorVal) rightRearDoorVal.textContent = v.toFixed(0);
+        });
+    }
+    if (leftRearDoorInput) {
+        leftRearDoorInput.value = String(leftRearDoorAngle.toFixed(0));
+        if (leftRearDoorVal) leftRearDoorVal.textContent = leftRearDoorAngle.toFixed(0);
+        leftRearDoorInput.addEventListener('input', (e) => {
+            const v = Math.max(0, Math.min(90, parseFloat(e.target.value)));
+            leftRearDoorAngle = v;
+            if (leftRearDoorVal) leftRearDoorVal.textContent = v.toFixed(0);
         });
     }
 }
@@ -609,28 +645,52 @@ function render(timestamp) {
     gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, bottomMiddleM), true)));
     gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
 
-    // 3. BAGIAN KANAN TENGAH (Pintu kanan - bisa dibuka)
-    // Pivot pintu di depan (z positif) agar membuka ke belakang
-    const rightDoorPivotZ = middleDepth / 2; // Engsel di depan
-    var rightMiddleM = mult(mat4(), bodyCombined);
-    rightMiddleM = mult(rightMiddleM, translate(bodyWidth / 2, 0.0, rightDoorPivotZ)); // Pindah ke pivot (engsel depan kanan)
-    rightMiddleM = mult(rightMiddleM, rotateY(-rightDoorAngle)); // Rotasi membuka pintu (negatif = buka ke kanan)
-    rightMiddleM = mult(rightMiddleM, translate(0.0, 0.0, -middleDepth / 2)); // Pindah ke center pintu
-    rightMiddleM = mult(rightMiddleM, scale(thinThickness / baseFullWidth, 0.8, middleDepth / baseFullDepth)); // Pintu, panjang Z sesuai middle
-    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(rightMiddleM));
-    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, rightMiddleM), true)));
+    // --- PINTU DEPAN DAN BELAKANG (4 Pintu) ---
+    const frontDoorDepth = middleDepth / 2; // Setengah dari middle untuk pintu depan
+    const rearDoorDepth = middleDepth / 2;  // Setengah dari middle untuk pintu belakang
+    
+    // 3. PINTU KANAN DEPAN (Front Right Door)
+    const rightFrontDoorPivotZ = middleDepth / 2; // Engsel di depan
+    var rightFrontDoorM = mult(mat4(), bodyCombined);
+    rightFrontDoorM = mult(rightFrontDoorM, translate(bodyWidth / 2, 0.0, rightFrontDoorPivotZ)); // Pindah ke pivot
+    rightFrontDoorM = mult(rightFrontDoorM, rotateY(-rightDoorAngle)); // Rotasi membuka pintu
+    rightFrontDoorM = mult(rightFrontDoorM, translate(0.0, 0.0, -frontDoorDepth / 2)); // Pindah ke center pintu
+    rightFrontDoorM = mult(rightFrontDoorM, scale(thinThickness / baseFullWidth, 0.8, frontDoorDepth / baseFullDepth)); 
+    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(rightFrontDoorM));
+    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, rightFrontDoorM), true)));
     gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
 
-    // 4. BAGIAN KIRI TENGAH (Pintu kiri - bisa dibuka)
-    // Pivot pintu di depan (z positif) agar membuka ke belakang
-    const leftDoorPivotZ = middleDepth / 2; // Engsel di depan
-    var leftMiddleM = mult(mat4(), bodyCombined);
-    leftMiddleM = mult(leftMiddleM, translate(-bodyWidth / 2, 0.0, leftDoorPivotZ)); // Pindah ke pivot (engsel depan kiri)
-    leftMiddleM = mult(leftMiddleM, rotateY(leftDoorAngle)); // Rotasi membuka pintu (positif = buka ke kiri)
-    leftMiddleM = mult(leftMiddleM, translate(0.0, 0.0, -middleDepth / 2)); // Pindah ke center pintu
-    leftMiddleM = mult(leftMiddleM, scale(thinThickness / baseFullWidth, 0.8, middleDepth / baseFullDepth)); // Pintu, panjang Z sesuai middle
-    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(leftMiddleM));
-    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, leftMiddleM), true)));
+    // 4. PINTU KIRI DEPAN (Front Left Door)
+    const leftFrontDoorPivotZ = middleDepth / 2; // Engsel di depan
+    var leftFrontDoorM = mult(mat4(), bodyCombined);
+    leftFrontDoorM = mult(leftFrontDoorM, translate(-bodyWidth / 2, 0.0, leftFrontDoorPivotZ)); // Pindah ke pivot
+    leftFrontDoorM = mult(leftFrontDoorM, rotateY(leftDoorAngle)); // Rotasi membuka pintu
+    leftFrontDoorM = mult(leftFrontDoorM, translate(0.0, 0.0, -frontDoorDepth / 2)); // Pindah ke center pintu
+    leftFrontDoorM = mult(leftFrontDoorM, scale(thinThickness / baseFullWidth, 0.8, frontDoorDepth / baseFullDepth)); 
+    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(leftFrontDoorM));
+    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, leftFrontDoorM), true)));
+    gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
+
+    // 5. PINTU KANAN BELAKANG (Rear Right Door)
+    const rightRearDoorPivotZ = 0.0; // Engsel di tengah (antara depan dan belakang)
+    var rightRearDoorM = mult(mat4(), bodyCombined);
+    rightRearDoorM = mult(rightRearDoorM, translate(bodyWidth / 2, 0.0, rightRearDoorPivotZ)); // Pindah ke pivot
+    rightRearDoorM = mult(rightRearDoorM, rotateY(-rightRearDoorAngle)); // Rotasi membuka pintu
+    rightRearDoorM = mult(rightRearDoorM, translate(0.0, 0.0, -rearDoorDepth / 2)); // Pindah ke center pintu
+    rightRearDoorM = mult(rightRearDoorM, scale(thinThickness / baseFullWidth, 0.8, rearDoorDepth / baseFullDepth)); 
+    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(rightRearDoorM));
+    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, rightRearDoorM), true)));
+    gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
+
+    // 6. PINTU KIRI BELAKANG (Rear Left Door)
+    const leftRearDoorPivotZ = 0.0; // Engsel di tengah (antara depan dan belakang)
+    var leftRearDoorM = mult(mat4(), bodyCombined);
+    leftRearDoorM = mult(leftRearDoorM, translate(-bodyWidth / 2, 0.0, leftRearDoorPivotZ)); // Pindah ke pivot
+    leftRearDoorM = mult(leftRearDoorM, rotateY(leftRearDoorAngle)); // Rotasi membuka pintu
+    leftRearDoorM = mult(leftRearDoorM, translate(0.0, 0.0, -rearDoorDepth / 2)); // Pindah ke center pintu
+    leftRearDoorM = mult(leftRearDoorM, scale(thinThickness / baseFullWidth, 0.8, rearDoorDepth / baseFullDepth)); 
+    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(leftRearDoorM));
+    gl.uniformMatrix3fv(nMatrixLoc, false, flatten(normalMatrix(mult(viewMatrix, leftRearDoorM), true)));
     gl.drawElements(gl.TRIANGLES, bodyIndicesCount, gl.UNSIGNED_SHORT, 0);
 
     // Front split: Engine (0.4) + Hood (0.1)
