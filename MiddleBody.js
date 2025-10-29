@@ -5,7 +5,10 @@ function drawMiddleBody(bodyCombined) {
     // Requires globals: gl, bodyVAO, steeringWheelVAO, viewMatrix, modelViewMatrixLoc, nMatrixLoc,
     // setMaterial, bodyIndicesCount, steeringWheelIndicesCount,
     // bodyMaterialAmbient, bodyMaterialDiffuse, bodyMaterialSpecular, bodyMaterialShininess,
-    // frontWheelSteerY, moveForward, brakePressed, moveBackward, handBrakeAngle
+    // frontWheelSteerY, moveForward, brakePressed, moveBackward, handBrakeAngle,
+    // useTextureLoc // <-- BARU
+
+    gl.uniform1i(useTextureLoc, false); // BARU: Nonaktifkan tekstur untuk semua bagian tubuh
 
     gl.bindVertexArray(bodyVAO);
     setMaterial(bodyMaterialAmbient, bodyMaterialDiffuse, bodyMaterialSpecular, bodyMaterialShininess);
